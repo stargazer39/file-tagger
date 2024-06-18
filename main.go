@@ -13,14 +13,20 @@ import (
 )
 
 type BrowseFlags struct {
-	path    *string
-	tagFile string
+	Path    *string
+	TagFile string
 }
 
 type TagFlags struct {
-	file    *string
-	tags    *arrayFlags
-	tagFile string
+	File    *string
+	Tags    *arrayFlags
+	TagFile string
+	Desc    *string
+}
+
+type FileInfo struct {
+	Tags []string
+	Desc string
 }
 
 type arrayFlags []string
@@ -39,16 +45,17 @@ func main() {
 	tagCMD := flag.NewFlagSet("tag", flag.ExitOnError)
 
 	browseFlags := BrowseFlags{
-		path:    browseCMD.String("f", ".", "set the root filepath for browsing"),
-		tagFile: ".tag",
+		Path:    browseCMD.String("f", ".", "set the root filepath for browsing"),
+		TagFile: ".tag",
 	}
 
 	var tags arrayFlags
 
 	tagFlags := TagFlags{
-		file:    tagCMD.String("f", ".", "tag file"),
-		tags:    &tags,
-		tagFile: ".tag",
+		File:    tagCMD.String("f", ".", "tag file"),
+		Tags:    &tags,
+		TagFile: ".tag",
+		Desc:    tagCMD.String("d", "", "Description"),
 	}
 
 	tagCMD.Var(&tags, "t", "Set tags")
@@ -76,16 +83,25 @@ func GetDB(path string) (*sql.DB, error) {
 
 	check(err2)
 
+	_, err3 := db.Exec("CREATE TABLE IF NOT EXISTS desc (name text PRIMARY KEY, desc text)")
+
+	check(err3)
+
 	return db, err
 }
 
 func Browse(options BrowseFlags) {
-	info, tf, listError, tfError := GetListOfFiles(*options.path, options.tagFile)
+	info, tf, listError, tfError := GetListOfFiles(*options.Path, options.TagFile)
 
 	for _, i := range *info {
 		log.Print(i.Name())
+		fi := FileInfo{
+			Tags: []string{},
+			Desc: "",
+		}
+
 		if tf {
-			db, err := GetDB(filepath.Join(*options.path, options.tagFile))
+			db, err := GetDB(filepath.Join(*options.Path, options.TagFile))
 
 			check(err)
 			// Read the tag base
@@ -95,12 +111,19 @@ func Browse(options BrowseFlags) {
 
 			for rows.Next() {
 				tag := ""
-				check(rows.Scan(&tag))
 
-				fmt.Printf(" %s", tag)
+				rows.Scan(&tag)
+
+				fi.Tags = append(fi.Tags, tag)
+			}
+
+			row := db.QueryRow("SELECT desc from desc where name = ?", i.Name())
+
+			if row.Err() == nil {
+				row.Scan(&fi.Desc)
 			}
 		}
-
+		log.Println(fi)
 		println()
 	}
 
@@ -111,18 +134,23 @@ func Browse(options BrowseFlags) {
 }
 
 func Tag(options TagFlags) {
-	dir, file := filepath.Split(*options.file)
+	dir, file := filepath.Split(*options.File)
 
-	dbPath := filepath.Join(dir, options.tagFile)
+	dbPath := filepath.Join(dir, options.TagFile)
 
-	log.Println(*options.file, *options.tags)
+	log.Println(*options.File, *options.Tags)
 
 	db, err := GetDB(dbPath)
 
 	check(err)
 
-	for _, t := range *options.tags {
+	for _, t := range *options.Tags {
 		_, err := db.Exec("INSERT INTO tags(name, tag) VALUES (?,?)", file, t)
+		check(err)
+	}
+
+	if *options.Desc != "" {
+		_, err := db.Exec("INSERT INTO desc(name, desc) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET desc=excluded.desc", file, options.Desc)
 		check(err)
 	}
 
