@@ -137,7 +137,7 @@ func GetListOfFiles(root string, tagFile string) (*[]os.FileInfo, bool, error, e
 	infoList := []os.FileInfo{}
 
 	err2 := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if info.Name() == "." || info.Name() == tagFile {
+		if info.Name() == root || info.Name() == tagFile {
 			return nil
 		}
 
