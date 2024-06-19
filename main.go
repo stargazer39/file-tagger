@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"file-tagger/tagger"
 	"flag"
 	"fmt"
 	"log"
@@ -79,6 +80,9 @@ func GetDB(path string) (*sql.DB, error) {
 
 	check(err)
 
+	_, err4 := db.Exec("VACUUM")
+	check(err4)
+
 	_, err2 := db.Exec("CREATE TABLE IF NOT EXISTS tags (name text, tag varchar(50))")
 
 	check(err2)
@@ -91,70 +95,13 @@ func GetDB(path string) (*sql.DB, error) {
 }
 
 func Browse(options BrowseFlags) {
-	info, tf, listError, tfError := GetListOfFiles(*options.Path, options.TagFile)
-
-	for _, i := range *info {
-		log.Print(i.Name())
-		fi := FileInfo{
-			Tags: []string{},
-			Desc: "",
-		}
-
-		if tf {
-			db, err := GetDB(filepath.Join(*options.Path, options.TagFile))
-
-			check(err)
-			// Read the tag base
-			rows, err := db.Query("SELECT tag from tags where name = ?", i.Name())
-
-			check(err)
-
-			for rows.Next() {
-				tag := ""
-
-				rows.Scan(&tag)
-
-				fi.Tags = append(fi.Tags, tag)
-			}
-
-			row := db.QueryRow("SELECT desc from desc where name = ?", i.Name())
-
-			if row.Err() == nil {
-				row.Scan(&fi.Desc)
-			}
-		}
-		log.Println(fi)
-		println()
-	}
-
-	if listError != nil || tfError != nil {
-		log.Println(listError, tfError)
-	}
-
+	t := tagger.NewTagger()
+	log.Println(t.ListFiles(*options.Path))
 }
 
 func Tag(options TagFlags) {
-	dir, file := filepath.Split(*options.File)
-
-	dbPath := filepath.Join(dir, options.TagFile)
-
-	log.Println(*options.File, *options.Tags)
-
-	db, err := GetDB(dbPath)
-
-	check(err)
-
-	for _, t := range *options.Tags {
-		_, err := db.Exec("INSERT INTO tags(name, tag) VALUES (?,?)", file, t)
-		check(err)
-	}
-
-	if *options.Desc != "" {
-		_, err := db.Exec("INSERT INTO desc(name, desc) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET desc=excluded.desc", file, options.Desc)
-		check(err)
-	}
-
-	db.Close()
+	t := tagger.NewTagger()
+	log.Println(t.TagFile(*options.File, *options.Tags))
 }
 
 func GetListOfFiles(root string, tagFile string) (*[]os.FileInfo, bool, error, error) {
