@@ -1,4 +1,4 @@
-module file-tagger
+module github.com/stargazer39/file-tagger
 
 go 1.21.5
 

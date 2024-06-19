@@ -1,12 +1,13 @@
 package main
 
 import (
-	"file-tagger/tagger"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"strings"
+
+	"github.com/stargazer39/file-tagger/tagger"
 
 	_ "github.com/mattn/go-sqlite3"
 )
