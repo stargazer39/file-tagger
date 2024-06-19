@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/stargazer39/file-tagger/tagerror"
 )
 
 type Tagger struct {
@@ -50,7 +52,7 @@ func (t *Tagger) ListFiles(rootDirPath string) (*[]TaggedFile, error) {
 		tags, err := db.GetTagsForFile(info.Name(), false)
 
 		if err != nil {
-			if !checkIfFileError(err) {
+			if !NoMetadata(err) {
 				return err
 			}
 		}
@@ -58,7 +60,7 @@ func (t *Tagger) ListFiles(rootDirPath string) (*[]TaggedFile, error) {
 		desc, err := db.GetDescriptionForFile(info.Name(), false)
 
 		if err != nil {
-			if !checkIfFileError(err) {
+			if !NoMetadata(err) {
 				return err
 			}
 		}
@@ -79,9 +81,9 @@ func (t *Tagger) ListFiles(rootDirPath string) (*[]TaggedFile, error) {
 	return &taggedFile, nil
 }
 
-func checkIfFileError(err error) bool {
-	if err != nil {
-		if err.Error() == "unable to open database file: The system cannot find the path specified." {
+func NoMetadata(err error) bool {
+	if tErr, ok := err.(*tagerror.TagError); ok {
+		if tErr.Is(tagerror.ErrNoMetadata) {
 			return true
 		}
 	}

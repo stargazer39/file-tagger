@@ -2,9 +2,11 @@ package tagger
 
 import (
 	"database/sql"
+	"os"
 	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/stargazer39/file-tagger/tagerror"
 )
 
 type MetadataDB struct {
@@ -23,7 +25,11 @@ func NewMetadataDB(root string, tagFile string) *MetadataDB {
 // var DatabaseErr error = fmt.Errorf("db err")
 
 func (md *MetadataDB) GetTagsForFile(name string, fresh bool) ([]string, error) {
-	db, err := md.getDb(fresh)
+	db, err := md.getDb(fresh, false)
+
+	if isNoDatabase(err) {
+		return []string{}, tagerror.NewTagError(tagerror.ErrNoMetadata, "no metadata", err)
+	}
 
 	if err != nil {
 		return []string{}, err
@@ -41,6 +47,9 @@ func (md *MetadataDB) GetTagsForFile(name string, fresh bool) ([]string, error) 
 		tag := ""
 
 		if err := rows.Scan(&tag); err != nil {
+			if isNoDatabase(err) {
+				return []string{}, tagerror.NewTagError(tagerror.ErrNoMetadata, "no metadata", err)
+			}
 			return tags, err
 		}
 
@@ -50,8 +59,30 @@ func (md *MetadataDB) GetTagsForFile(name string, fresh bool) ([]string, error) 
 	return tags, nil
 }
 
+func isNoDatabase(err error) bool {
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return true
+		}
+
+		if err == os.ErrNotExist {
+			return true
+		}
+
+		if err.Error() == "unable to open database file: The system cannot find the path specified." {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (md *MetadataDB) GetDescriptionForFile(name string, fresh bool) (string, error) {
-	db, err := md.getDb(fresh)
+	db, err := md.getDb(fresh, false)
+
+	if isNoDatabase(err) {
+		return "", tagerror.NewTagError(tagerror.ErrNoMetadata, "no metadata", err)
+	}
 
 	if err != nil {
 		return "", err
@@ -62,6 +93,9 @@ func (md *MetadataDB) GetDescriptionForFile(name string, fresh bool) (string, er
 
 	if row.Err() == nil {
 		if err := row.Scan(&desc); err != nil {
+			if isNoDatabase(err) {
+				return "", tagerror.NewTagError(tagerror.ErrNoMetadata, "no metadata", err)
+			}
 			return "", err
 		}
 	}
@@ -70,7 +104,7 @@ func (md *MetadataDB) GetDescriptionForFile(name string, fresh bool) (string, er
 }
 
 func (md *MetadataDB) TagFile(name string, tags []string, fresh bool) error {
-	db, err := md.getDb(fresh)
+	db, err := md.getDb(fresh, true)
 
 	if err != nil {
 		return err
@@ -88,7 +122,7 @@ func (md *MetadataDB) TagFile(name string, tags []string, fresh bool) error {
 }
 
 func (md *MetadataDB) SetDescriptionForFile(name string, desc string, fresh bool) error {
-	db, err := md.getDb(fresh)
+	db, err := md.getDb(fresh, true)
 
 	if err != nil {
 		return err
@@ -113,7 +147,18 @@ func (md *MetadataDB) Close() error {
 	return nil
 }
 
-func (md *MetadataDB) getDb(fresh bool) (*sql.DB, error) {
+func fileExists(filePath string) (bool, error) {
+	info, err := os.Stat(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return !info.IsDir(), nil
+}
+
+func (md *MetadataDB) getDb(fresh bool, createNew bool) (*sql.DB, error) {
 	if md.db != nil && !fresh {
 		return md.db, nil
 	}
@@ -123,6 +168,12 @@ func (md *MetadataDB) getDb(fresh bool) (*sql.DB, error) {
 	}
 
 	dbPath := filepath.Join(md.root, md.tagFile)
+
+	if !createNew {
+		if ok, _ := fileExists(dbPath); !ok {
+			return nil, os.ErrNotExist
+		}
+	}
 
 	var err error
 
