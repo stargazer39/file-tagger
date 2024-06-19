@@ -10,8 +10,15 @@ check_changes:
 		exit 1; \
 	fi
 
+# Check if the current commit is already tagged
+check_tag:
+	@if git describe --exact-match --tags $(VERSION) >/dev/null 2>&1; then \
+		echo "The current commit is already tagged."; \
+		exit 1; \
+	fi
+
 # Create a Git tag
-tag: check_changes
+tag: check_changes check_tag
 	@echo "Creating Git tag..."
 	git tag -a $(VERSION) -m "Release version $(VERSION)"
 	git push $(REMOTE) $(VERSION)
