@@ -3,6 +3,8 @@ package tagger
 import (
 	"database/sql"
 	"path/filepath"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type MetadataDB struct {
