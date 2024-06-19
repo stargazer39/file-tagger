@@ -1,13 +1,11 @@
 package main
 
 import (
-	"database/sql"
 	"file-tagger/tagger"
 	"flag"
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -75,25 +73,6 @@ func main() {
 	}
 }
 
-func GetDB(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", path)
-
-	check(err)
-
-	_, err4 := db.Exec("VACUUM")
-	check(err4)
-
-	_, err2 := db.Exec("CREATE TABLE IF NOT EXISTS tags (name text, tag varchar(50))")
-
-	check(err2)
-
-	_, err3 := db.Exec("CREATE TABLE IF NOT EXISTS desc (name text PRIMARY KEY, desc text)")
-
-	check(err3)
-
-	return db, err
-}
-
 func Browse(options BrowseFlags) {
 	t := tagger.NewTagger()
 	log.Println(t.ListFiles(*options.Path))
@@ -102,34 +81,6 @@ func Browse(options BrowseFlags) {
 func Tag(options TagFlags) {
 	t := tagger.NewTagger()
 	log.Println(t.TagFile(*options.File, *options.Tags))
-}
-
-func GetListOfFiles(root string, tagFile string) (*[]os.FileInfo, bool, error, error) {
-	tf := filepath.Join(root, tagFile)
-
-	info, err := os.Stat(tf)
-
-	infoList := []os.FileInfo{}
-
-	err2 := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if info.Name() == root || info.Name() == tagFile {
-			return nil
-		}
-
-		if info.IsDir() || strings.HasPrefix(".", info.Name()) {
-			return filepath.SkipDir
-		}
-
-		infoList = append(infoList, info)
-
-		return nil
-	})
-
-	return &infoList, err == nil && !info.IsDir(), err2, err
-}
-
-func GetTagData(name string) {
-
 }
 
 func check(err error) {
